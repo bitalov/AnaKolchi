@@ -22,24 +22,27 @@ if not any(LANGUAGE_API_KEYS.values()):
     st.error("Error: At least one Wit.ai API key must be provided in the .env file.")
     st.stop()
 
-def download_youtube_audio(youtube_url):
+def download_youtube_video(youtube_url):
     output_path = Path('downloads') / '%(id)s.%(ext)s'
-    command = ['yt-dlp', '-x', '--audio-format', 'wav', '-o', str(output_path), youtube_url]
+    command = ['yt-dlp', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4', '-o', str(output_path), youtube_url]
     subprocess.run(command, check=True)
-    audio_file = next(Path('downloads').glob('*.wav'))
-    return audio_file
+    video_file = next(Path('downloads').glob('*.mp4'))
+    return video_file
 
-def convert_to_wav(file_path):
-    if file_path.suffix.lower() == '.mp3':
-        wav_output_path = file_path.with_suffix('.wav')
-        command = ['ffmpeg', '-i', str(file_path), str(wav_output_path)]
-    elif file_path.suffix.lower() in ['.mp4', '.mkv', '.avi']:
-        wav_output_path = file_path.with_suffix('.wav')
-        command = ['ffmpeg', '-i', str(file_path), '-vn', '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '1', str(wav_output_path)]
-    else:
-        return file_path
+def extract_audio(file_path):
+    audio_output_path = file_path.with_suffix('.wav')
+    command = ['ffmpeg', '-i', str(file_path), '-vn', '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '1', str(audio_output_path)]
     subprocess.run(command, check=True)
-    return wav_output_path
+    return audio_output_path
+
+def merge_subtitles(video_path, srt_path):
+    output_path = video_path.with_name(video_path.stem + '_with_subs.mp4')
+    srt_path_str = str(srt_path.resolve()).replace('\\', '\\\\').replace(':', '\\:')
+    command = ['ffmpeg', '-i', str(video_path), '-vf', f"subtitles='{srt_path_str}'", '-codec:a', 'copy', str(output_path)]
+    subprocess.run(command, check=True)
+    return output_path
+
+
 
 def is_wav_file(file_path):
     try:
@@ -76,15 +79,14 @@ def transcribe_file(file_path, language_sign):
         save_yt_dlp_responses=False,
         output_sample=0,
         output_formats=[TranscriptType.TXT, TranscriptType.SRT],
-        output_dir=str(file_path.parent),
+        output_dir=os.path.join(str(file_path.parent)),
     )
 
     st.write(f"Transcribing file: {file_path}")
     progress = list(farrigh(config))
 
-    #print(progress)
-    srt_file = file_path.parent / f"{file_path.stem}.srt"
-    txt_file = file_path.parent / f"{file_path.stem}.txt"
+    srt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.srt"))
+    txt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.txt"))
 
     if srt_file.exists() and srt_file.stat().st_size > 0 and txt_file.exists() and txt_file.stat().st_size > 0:
         st.success(f"Transcription completed. Check the output directory for the generated files.")
@@ -104,10 +106,14 @@ def main():
         youtube_url = st.text_input("Enter the YouTube video link:")
         if st.button("Transcribe YouTube video"):
             if youtube_url and language_sign:
-                audio_file = download_youtube_audio(youtube_url)
+                video_file = download_youtube_video(youtube_url)
+                audio_file = extract_audio(video_file)
                 srt_path = transcribe_file(audio_file, language_sign)
                 if srt_path:
-                    st.download_button("Download SRT", data=open(srt_path, "rb"), file_name="transcription.srt")
+                    merged_video = merge_subtitles(video_file, srt_path)
+                    st.video(str(merged_video))
+                    with open(merged_video, "rb") as file:
+                        st.download_button("Download Video with Subtitles", file, file_name=merged_video.name)
             else:
                 st.error("Please provide both the YouTube video link and the language.")
     else:
@@ -116,10 +122,19 @@ def main():
             with open(file_path.name, "wb") as f:
                 f.write(file_path.getvalue())
             file_path = Path(file_path.name)
-            file_path = convert_to_wav(file_path)
-            srt_path = transcribe_file(file_path, language_sign)
+            if file_path.suffix.lower() in ['.mp4', '.mkv', '.avi']:
+                audio_file = extract_audio(file_path)
+            else:
+                audio_file = file_path
+            srt_path = transcribe_file(audio_file, language_sign)
             if srt_path:
-                st.download_button("Download SRT", data=open(srt_path, "rb"), file_name="transcription.srt")
+                if file_path.suffix.lower() in ['.mp4', '.mkv', '.avi']:
+                    merged_video = merge_subtitles(file_path, srt_path)
+                    st.video(str(merged_video))
+                    with open(merged_video, "rb") as file:
+                        st.download_button("Download Video with Subtitles", file, file_name=merged_video.name)
+                else:
+                    st.download_button("Download SRT", data=open(srt_path, "rb"), file_name="transcription.srt")
 
 if __name__ == "__main__":
     main()
