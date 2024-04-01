@@ -11,8 +11,8 @@ load_dotenv()
 
 # Define Wit.ai API keys for languages using environment variables
 LANGUAGE_API_KEYS = {
-    'AR': os.getenv('WIT_API_KEY_ARABIC'),
     'EN': os.getenv('WIT_API_KEY_ENGLISH'),
+    'AR': os.getenv('WIT_API_KEY_ARABIC'),
     'FR': os.getenv('WIT_API_KEY_FRENCH'),
     'JA': os.getenv('WIT_API_KEY_JAPANESE'),
     # Add more languages and API keys as needed
@@ -23,30 +23,30 @@ if not any(LANGUAGE_API_KEYS.values()):
     st.error("Error: At least one Wit.ai API key must be provided in the .env file.")
     st.stop()
 
-def download_youtube_video(youtube_url, progress_bar):
+def download_youtube_video(youtube_url):
     st.text("Downloading YouTube video...")
-    progress_bar.progress(25)
+    progress_bar = st.progress(0)
     
     output_path = Path('downloads') / '%(id)s.%(ext)s'
     command = ['yt-dlp', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4', '-o', str(output_path), youtube_url]
     subprocess.run(command, check=True)
     video_file = next(Path('downloads').glob('*.mp4'))
 
-    progress_bar.progress(30)
+    progress_bar.progress(25)
     return video_file
 
-def extract_audio(file_path, progress_bar):
+def extract_audio(file_path):
     st.text("Extracting audio from video...")
-    progress_bar.progress(30)
+    progress_bar.progress(50)
     
     audio_output_path = file_path.with_suffix('.wav')
     command = ['ffmpeg', '-i', str(file_path), '-vn', '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '1', str(audio_output_path)]
     subprocess.run(command, check=True)
 
-    progress_bar.progress(50)
+    progress_bar.progress(75)
     return audio_output_path
 
-def clean_srt_file(srt_path, progress_bar):
+def clean_srt_file(srt_path):
     st.text("Cleaning SRT file...")
     progress_bar.progress(85)
     
@@ -66,7 +66,7 @@ def clean_srt_file(srt_path, progress_bar):
     progress_bar.progress(90)
     return cleaned_srt_path
 
-def merge_subtitles(video_path, srt_path, language, progress_bar):
+def merge_subtitles(video_path, srt_path, language):
     st.text("Merging subtitles with video...")
     progress_bar.progress(95)
     
@@ -93,16 +93,9 @@ def merge_subtitles(video_path, srt_path, language, progress_bar):
     progress_bar.progress(100)
     return output_path
 
-def is_wav_file(file_path):
-    try:
-        with open(file_path, 'rb') as file:
-            return file.read(4) == b'RIFF'
-    except IOError:
-        return False
-    
-def transcribe_file(file_path, language_sign, progress_bar):
+def transcribe_file(file_path, language_sign):
     st.text("Transcribing audio file...")
-    progress_bar.progress(50)
+    progress_bar.progress(30)
     
     if not is_wav_file(file_path):
         st.error(f"Skipping file {file_path} as it is not in WAV format.")
@@ -135,15 +128,15 @@ def transcribe_file(file_path, language_sign, progress_bar):
     )
 
     farrigh_progress = list(farrigh(config))
-    progress_bar.progress(90)
+    progress_bar.progress(80)
 
     srt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.srt"))
     txt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.txt"))
 
     if srt_file.exists() and srt_file.stat().st_size > 0 and txt_file.exists() and txt_file.stat().st_size > 0:
         st.success(f"Transcription completed. Check the output directory for the generated files.")
-        #cleaned_srt_file = clean_srt_file(srt_file, progress_bar)
-        return srt_file
+        cleaned_srt_file = clean_srt_file(srt_file)
+        return cleaned_srt_file
     else:
         st.error("Transcription failed. No SRT or TXT file was generated, or the file sizes are 0.")
 
@@ -157,13 +150,12 @@ def main():
     if source_type == "YouTube video":
         youtube_url = st.text_input("Enter the YouTube video link:")
         if st.button("Transcribe YouTube video"):
-            progress_bar = st.progress(0)
             if youtube_url and language_sign:
-                video_file = download_youtube_video(youtube_url, progress_bar)
-                audio_file = extract_audio(video_file, progress_bar)
-                srt_path = transcribe_file(audio_file, language_sign, progress_bar)
+                video_file = download_youtube_video(youtube_url)
+                audio_file = extract_audio(video_file)
+                srt_path = transcribe_file(audio_file, language_sign)
                 if srt_path:
-                    merged_video = merge_subtitles(video_file, srt_path, language_sign, progress_bar)
+                    merged_video = merge_subtitles(video_file, srt_path, language_sign)
                     st.video(str(merged_video))
                     with open(merged_video, "rb") as file:
                         st.download_button("Download Video with Subtitles", file, file_name=merged_video.name)
@@ -172,18 +164,17 @@ def main():
     else:
         file_path = st.file_uploader("Upload a local file:", type=['wav', 'mp3', 'mp4', 'mkv', 'avi'])
         if st.button("Transcribe Local File") and file_path and language_sign:
-            progress_bar = st.progress(0)
             with open(file_path.name, "wb") as f:
                 f.write(file_path.getvalue())
             file_path = Path(file_path.name)
             if file_path.suffix.lower() in ['.mp4', '.mkv', '.avi']:
-                audio_file = extract_audio(file_path, progress_bar)
+                audio_file = extract_audio(file_path)
             else:
                 audio_file = file_path
-            srt_path = transcribe_file(audio_file, language_sign, progress_bar)
+            srt_path = transcribe_file(audio_file, language_sign)
             if srt_path:
                 if file_path.suffix.lower() in ['.mp4', '.mkv', '.avi']:
-                    merged_video = merge_subtitles(file_path, srt_path, language_sign, progress_bar)
+                    merged_video = merge_subtitles(file_path, srt_path, language_sign)
                     st.video(str(merged_video))
                     with open(merged_video, "rb") as file:
                         st.download_button("Download Video with Subtitles", file, file_name=merged_video.name)
