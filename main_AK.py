@@ -35,10 +35,27 @@ def extract_audio(file_path):
     subprocess.run(command, check=True)
     return audio_output_path
 
-def merge_subtitles(video_path, srt_path):
+def merge_subtitles(video_path, srt_path, language):
     output_path = video_path.with_name(video_path.stem + '_with_subs.mp4')
     srt_path_str = str(srt_path.resolve()).replace('\\', '\\\\').replace(':', '\\:')
-    command = ['ffmpeg', '-i', str(video_path), '-vf', f"subtitles='{srt_path_str}'", '-codec:a', 'copy', str(output_path)]
+
+    # Set default font size and font name
+    font_size = 24
+    font_name = 'Arial'
+
+    # Language-specific font settings
+    language_fonts = {
+        'EN': ('Arial', 24),
+        'AR': ('Arial Unicode MS', 30),  # Example: Arial Unicode MS for Arabic
+        'JA': ('MS PGothic', 30),        # Example: MS PGothic for Japanese
+        # Add more language-font mappings as needed
+    }
+
+    if language in language_fonts:
+        font_name, font_size = language_fonts[language]
+
+    subtitles_filter = f"subtitles='{srt_path_str}':force_style='FontName={font_name},FontSize={font_size}'"
+    command = ['ffmpeg', '-i', str(video_path), '-vf', subtitles_filter, '-codec:a', 'copy', str(output_path)]
     subprocess.run(command, check=True)
     return output_path
 
@@ -97,7 +114,7 @@ def transcribe_file(file_path, language_sign):
     return None
 
 def main():
-    st.title("Video and Audio Transcriber")
+    st.title("AnaKolchi - Sous Titre Kolchiii")
 
     source_type = st.radio("Choose the source type:", ("YouTube video", "Local file"))
     language_sign = st.selectbox("Select the language:", list(LANGUAGE_API_KEYS.keys()))
@@ -110,7 +127,7 @@ def main():
                 audio_file = extract_audio(video_file)
                 srt_path = transcribe_file(audio_file, language_sign)
                 if srt_path:
-                    merged_video = merge_subtitles(video_file, srt_path)
+                    merged_video = merge_subtitles(video_file, srt_path, language_sign)
                     st.video(str(merged_video))
                     with open(merged_video, "rb") as file:
                         st.download_button("Download Video with Subtitles", file, file_name=merged_video.name)
@@ -129,7 +146,7 @@ def main():
             srt_path = transcribe_file(audio_file, language_sign)
             if srt_path:
                 if file_path.suffix.lower() in ['.mp4', '.mkv', '.avi']:
-                    merged_video = merge_subtitles(file_path, srt_path)
+                    merged_video = merge_subtitles(file_path, srt_path, language_sign)
                     st.video(str(merged_video))
                     with open(merged_video, "rb") as file:
                         st.download_button("Download Video with Subtitles", file, file_name=merged_video.name)
