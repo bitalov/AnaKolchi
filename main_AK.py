@@ -33,7 +33,6 @@ if not ANTHROPIC_API_KEY:
     st.error("Error: Anthropic API key must be provided in the .env file.")
     st.stop()
 
-
 anthropic_client = anthropic.Anthropic(
     api_key=ANTHROPIC_API_KEY,
 )
