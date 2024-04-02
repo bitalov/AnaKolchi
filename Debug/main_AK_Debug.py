@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from tafrigh import Config, TranscriptType, farrigh
+from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,34 +25,26 @@ if not any(LANGUAGE_API_KEYS.values()):
     st.stop()
 
 def download_youtube_video(youtube_url):
-    st.text("Downloading YouTube video...")
-    progress_bar = st.progress(0)
-    
     output_path = Path('downloads') / '%(id)s.%(ext)s'
     command = ['yt-dlp', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4', '-o', str(output_path), youtube_url]
     subprocess.run(command, check=True)
     video_file = next(Path('downloads').glob('*.mp4'))
-
-    progress_bar.progress(25)
     return video_file
 
 def extract_audio(file_path):
-    st.text("Extracting audio from video...")
-    progress_bar.progress(50)
-    
     audio_output_path = file_path.with_suffix('.wav')
+    # Tafrigh converts audios to wav so it's better to make my own kind of compressed wav LOL .
     command = ['ffmpeg', '-i', str(file_path), '-vn', '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '1', str(audio_output_path)]
+    #command = ['ffmpeg', '-i', str(file_path), '-vn', '-codec:a', 'libmp3lame', '-qscale:a', '2', str(audio_output_path)]
     subprocess.run(command, check=True)
-
-    progress_bar.progress(75)
     return audio_output_path
 
 def clean_srt_file(srt_path):
-    st.text("Cleaning SRT file...")
-    progress_bar.progress(85)
-    
+    # Define regular expression patterns to match invisible characters and squares
     invisible_char_pattern = re.compile(r'[\u200B-\u200D\uFEFF]')
     square_pattern = re.compile(r'[\u25A0-\u25FF]')
+    
+    # Define a regular expression pattern to match any non-printable characters
     non_printable_pattern = re.compile(r'[\x00-\x1F\x7F-\x9F]')
 
     cleaned_srt_path = srt_path.with_name(srt_path.stem + '_cleaned.srt')
@@ -60,26 +53,27 @@ def clean_srt_file(srt_path):
         for line in infile:
             cleaned_line = invisible_char_pattern.sub('', line)
             cleaned_line = square_pattern.sub('', cleaned_line)
+            
+            # Remove any non-printable characters
             cleaned_line = non_printable_pattern.sub('', cleaned_line)
+            
             outfile.write(cleaned_line)
     
-    progress_bar.progress(90)
     return cleaned_srt_path
 
 def merge_subtitles(video_path, srt_path, language):
-    st.text("Merging subtitles with video...")
-    progress_bar.progress(95)
-    
     output_path = video_path.with_name(video_path.stem + '_with_subs.mp4')
     srt_path_str = str(srt_path.resolve()).replace('\\', '\\\\').replace(':', '\\:')
 
+    # Set default font size and font name
     font_size = 24
     font_name = 'Arial'
 
+    # Language-specific font settings
     language_fonts = {
         'EN': ('Arial', 24),
-        'AR': ('Times New Roman', 28),
-        'JA': ('MS PGothic', 28),
+        'AR': ('Times New Roman', 28),  # Example: Arial Unicode MS for Arabic
+        'JA': ('MS PGothic', 28),        # Example: MS PGothic for Japanese
         # Add more language-font mappings as needed
     }
 
@@ -89,14 +83,24 @@ def merge_subtitles(video_path, srt_path, language):
     subtitles_filter = f"subtitles='{srt_path_str}':charenc=UTF-8:force_style='FontName={font_name},FontSize={font_size}'"
     command = ['ffmpeg', '-hwaccel', 'auto', '-i', str(video_path), '-vf', subtitles_filter, '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'copy', str(output_path)]
     subprocess.run(command, check=True)
-
-    progress_bar.progress(100)
     return output_path
 
-def transcribe_file(file_path, language_sign):
-    st.text("Transcribing audio file...")
-    progress_bar.progress(30)
+
+def is_wav_file(file_path):
+    try:
+        with open(file_path, 'rb') as file:
+            return file.read(4) == b'RIFF'
+    except IOError:
+        return False
     
+def is_mp3_file(file_path):
+    try:
+        with open(file_path, 'rb') as file:
+            return file.read(3) == b'ID3'
+    except IOError:
+        return False
+
+def transcribe_file(file_path, language_sign):
     if not is_wav_file(file_path):
         st.error(f"Skipping file {file_path} as it is not in WAV format.")
         return None
@@ -127,8 +131,8 @@ def transcribe_file(file_path, language_sign):
         output_dir=os.path.join(str(file_path.parent)),
     )
 
-    farrigh_progress = list(farrigh(config))
-    progress_bar.progress(80)
+    st.write(f"Transcribing file: {file_path}")
+    progress = list(farrigh(config))
 
     srt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.srt"))
     txt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.txt"))
@@ -143,6 +147,17 @@ def transcribe_file(file_path, language_sign):
     return None
 
 def main():
+
+   # video_path = Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\mNDj_YT971A.mp4")
+   # srt_path = Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\mNDj_YT971A.srt")
+   # language = "AR"  # Specify the language code
+   # output_path = merge_subtitles(video_path, srt_path, language)
+
+# Print the output path
+    #print("Merged video with subtitles saved at:", output_path)
+    #sys.exit(0)
+
+
     st.title("AnaKolchi - Sous Titre Kolchiii")
     source_type = st.radio("Choose the source type:", ("YouTube video", "Local file"))
     language_sign = st.selectbox("Select the language:", list(LANGUAGE_API_KEYS.keys()))
