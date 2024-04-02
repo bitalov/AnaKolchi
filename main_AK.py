@@ -1,4 +1,6 @@
 import streamlit as st
+import tempfile
+import base64
 import sys
 import re
 import os
@@ -102,8 +104,9 @@ def merge_subtitles(video_path, srt_path, language, progress_bar):
     subtitles_filter = f"subtitles='{srt_path_str}':charenc=UTF-8:force_style='FontName={font_name},FontSize={font_size}'"
     command = ['ffmpeg', '-hwaccel', 'auto', '-i', str(video_path), '-vf', subtitles_filter, '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'copy', str(output_path)]
     subprocess.run(command, check=True)
-
+    
     progress_bar.progress(100)
+    st.success(f"Video is ready. Check the links below for the generated file.")
     return output_path
 
 def is_wav_file(file_path):
@@ -133,7 +136,7 @@ def transcribe_file(file_path, language_sign, progress_bar):
         verbose=False,
         model_name_or_path="small",
         task="",
-        language=language_sign.lower(),
+        language="",
         use_faster_whisper=True,
         beam_size=5,
         ct2_compute_type="",
@@ -154,11 +157,11 @@ def transcribe_file(file_path, language_sign, progress_bar):
     txt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.txt"))
 
     if srt_file.exists() and srt_file.stat().st_size > 0 and txt_file.exists() and txt_file.stat().st_size > 0:
-        st.success(f"Transcription completed. Check the output directory for the generated files.")
+        st.success(f"Transcription completed. Check the links below for the generated files.")
         #cleaned_srt_file = clean_srt_file(srt_file, progress_bar)
         return srt_file
     else:
-        st.error("Transcription failed. No SRT or TXT file was generated, or the file sizes are 0.")
+        st.error("Transcription failed. No SRT or TXT file was generated, or the files are corrupted.")
 
     return None
 def count_srt_words(srt_path):
@@ -170,7 +173,7 @@ def translate_subtitles(srt_path, target_language, progress_bar):
     st.text("Translating subtitles...")
     progress_bar.progress(85)
     translated_srt_path = srt_path.with_name(srt_path.stem + f'_translated_{target_language}.srt')
-    prompt = f"Translate the following SRT file to the target following language {target_language}"
+    prompt = f"Translate the following SRT file to the target following language or dialect {target_language}"
     with open(srt_path, 'r', encoding='utf-8') as infile:
         for line in infile:
             prompt += line
@@ -188,8 +191,11 @@ def translate_subtitles(srt_path, target_language, progress_bar):
     ]
     )
     translated_srt = message.content[0].text
+    #Removing extra generated text to preserve SRT Format !!!!!!!!
+    #-------------------------------------------------------------#
     translated_srt_lines = (translated_srt.split('\n'))[2:]
     translated_srt = '\n'.join(translated_srt_lines)
+    #-------------------------------------------------------------#
     with open(translated_srt_path, 'w', encoding='utf-8') as outfile:
         outfile.write(translated_srt)
     progress_bar.progress(90)
@@ -231,7 +237,7 @@ def main():
     st.title("AnaKolchi - Sous Titre Kolchiii")
     source_type = st.radio("Choose the source type:", ("YouTube video", "Local file"))
     language_sign = st.selectbox("Select the language:", list(LANGUAGE_API_KEYS.keys()))
-    target_language = st.selectbox("Select the target language for translation:", ['en', 'ar', 'fr', 'ja', 'es', 'de'])
+    target_language = st.selectbox("Select the target language for translation (Optional):", ['','en', 'ar', 'fr', 'ja', 'es', 'de' ,'Darija'])
 
     if source_type == "YouTube video":
         youtube_url = st.text_input("Enter the YouTube video link:")
@@ -261,26 +267,25 @@ def main():
 
         if srt_path:
             # Download original SRT and TXT
-            with open(srt_path, "rb") as file:
-                st.download_button("Download Original SRT", file, file_name=srt_path.name)
-            txt_path = srt_path.with_suffix('.txt')
-            with open(txt_path, "rb") as file:
-                st.download_button("Download Original TXT Transcription", file, file_name=txt_path.name)
+            srt_url = f"data:text/plain;base64,{base64.b64encode(open(srt_path, 'rb').read()).decode()}"
+            st.markdown(f"<a href='{srt_url}' download='{srt_path.name}' target='_blank'>Download Original SRT</a>", unsafe_allow_html=True)
 
-            # Translate subtitles
-            translated_srt_path = translate_subtitles(srt_path, target_language, progress_bar)
-            if translated_srt_path:
-                # Download translated SRT
-                with open(translated_srt_path, "rb") as file:
-                    st.download_button(f"Download Translated SRT ({target_language.upper()})", file, file_name=translated_srt_path.name)
-                
-                # Merge subtitles with video
-                merged_video = merge_subtitles(video_file, translated_srt_path, target_language, progress_bar)
-                st.video(str(merged_video))
-                with open(merged_video, "rb") as file:
-                    st.download_button("Download Video with Translated Subtitles", file, file_name=merged_video.name)
-            else:
-                st.error("Translation failed.")
+            txt_path = srt_path.with_suffix('.txt')
+            txt_url = f"data:text/plain;base64,{base64.b64encode(open(txt_path, 'rb').read()).decode()}"
+            st.markdown(f"<a href='{txt_url}' download='{txt_path.name}' target='_blank'>Download Original TXT Transcription</a>", unsafe_allow_html=True)
+
+            # Translate subtitles if a target language is selected
+            if target_language:
+                translated_srt_path = translate_subtitles(srt_path, target_language, progress_bar)
+                if translated_srt_path:
+                    srt_path = translated_srt_path
+
+            # Merge subtitles with video
+            merged_video = merge_subtitles(video_file, srt_path, language_sign, progress_bar)
+            st.video(str(merged_video))
+            with open(merged_video, "rb") as file:
+                st.download_button("Download Video with Translated Subtitles", file, file_name=merged_video.name)
+
         else:
             st.error("Transcription failed.")
 
