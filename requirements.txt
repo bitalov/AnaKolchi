@@ -3,3 +3,4 @@ python-dotenv
 tafrigh
 anthropic
 ffmpeg
+"tafrigh[wit]"
