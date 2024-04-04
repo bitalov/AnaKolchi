@@ -10,6 +10,14 @@ from tafrigh import Config, TranscriptType, farrigh
 import anthropic
 
 load_dotenv()
+
+LANGUAGE_API_KEYS = {
+    'AR': os.getenv('WIT_API_KEY_ARABIC'),
+    'EN': os.getenv('WIT_API_KEY_ENGLISH'),
+    'FR': os.getenv('WIT_API_KEY_FRENCH'),
+    'JA': os.getenv('WIT_API_KEY_JAPANESE'),
+    # Add more languages and API keys as needed
+}
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 anthropic_client = anthropic.Anthropic(
@@ -52,9 +60,54 @@ def translate_subtitles_debug(srt_path, target_language):
     #progress_bar.progress(90)
     return translated_srt_path
 
+
+def transcribe_file(file_path, language_sign):
+
+
+    wit_api_key = LANGUAGE_API_KEYS.get(language_sign.upper())
+    if not wit_api_key:
+        print(f"API key not found for language: {language_sign}")
+        return None
+
+    config = Config(
+        urls_or_paths=[str(file_path)],
+        skip_if_output_exist=False,
+        playlist_items="",
+        verbose=False,
+        model_name_or_path="small",
+        task="",
+        language="",
+        use_faster_whisper=True,
+        beam_size=5,
+        ct2_compute_type="",
+        wit_client_access_tokens=[wit_api_key],
+        max_cutting_duration=5,
+        min_words_per_segment=1,
+        save_files_before_compact=False,
+        save_yt_dlp_responses=False,
+        output_sample=0,
+        output_formats=[TranscriptType.TXT, TranscriptType.SRT],
+        output_dir=os.path.join(str(file_path.parent)),
+    )
+
+    farrigh_progress = list(farrigh(config))
+
+    srt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.srt"))
+    txt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.txt"))
+
+    if srt_file.exists() and srt_file.stat().st_size > 0 and txt_file.exists() and txt_file.stat().st_size > 0:
+        print("Transcription completed. Check the links below for the generated files.")
+        #cleaned_srt_file = clean_srt_file(srt_file, progress_bar)
+        return srt_file
+    else:
+        print("Transcription failed. No SRT or TXT file was generated, or the files are corrupted.")
+
+    return None
+
 srt_path = Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\mNDj_YT971A.srt")
+audio_path = Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\KY_CXWHkByM.wav")
 language = "EN"  # Specify the language code
-output_path = translate_subtitles_debug(srt_path, language)
+output_path = transcribe_file(audio_path, language)
 # Print the output path
 print("Translated Subtitles saved at:", output_path)
 sys.exit(0)
