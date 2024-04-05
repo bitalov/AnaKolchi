@@ -267,8 +267,6 @@ output = gr.Video()
 demo = gr.Interface(fn=interface, concurrency_limit=4,inputs=inputs, outputs=output,title="AnaKolchi - Sous Titre Kolchiii")
 
 #demo.queue()  # Set up a queue for the interface
-# https://youtu.be/zy8F_tGJYBM?si=65RDzq4JTbm-kzq9
-# https://youtu.be/zy8F_tGJYBM?si=65RDzq4JTbm-kzq9
 if __name__ == '__main__':
     demo.queue()
     demo.launch(server_name = "0.0.0.0")
