@@ -140,7 +140,7 @@ def transcribe_file(file_path, language_sign,progress=gr.Progress()):
     txt_file = Path(os.path.join(str(file_path.parent), f"{file_path.stem}.txt"))
 
     if srt_file.exists() and srt_file.stat().st_size > 0 and txt_file.exists() and txt_file.stat().st_size > 0:
-        return revising_subtitles(srt_file,progress)
+        return srt_file
     else:
         print("Transcription failed. No SRT or TXT file was generated, or the files are corrupted.")
 
@@ -167,7 +167,7 @@ def translate_subtitles(srt_path, target_language, progress=gr.Progress()):
         model="claude-3-haiku-20240307",
         max_tokens=max_tokens_estimated,
         temperature=0.2,
-        system="Detect what's language / Dialect automaticaly and Respect and preserve SRT file format",
+        system="Return SRT FILE FORMAT !!",
         messages=[
         {"role": "user", "content": prompt} 
     ]
@@ -187,10 +187,11 @@ def translate_subtitles(srt_path, target_language, progress=gr.Progress()):
 def revising_subtitles(srt_path, progress=gr.Progress()):
     progress(0.7, "Revising subtitles ...")
     revised_srt_path = srt_path.with_name(srt_path.stem + f'_cleaned.srt')
-    prompt = f"[[[PRESERVE THE SRT FILE FORMAT !!!]]] FIX WRONG SPELLED WORDS / CONSISTENCY OF THE DIALOGUES OF THE SRT FILE\n"
     with open(srt_path, 'r', encoding='utf-8') as infile:
-        for line in infile:
-            prompt += line
+        srt_content = infile.read()
+
+    # Prepare the prompt for the language model
+    prompt = f"[[[PRESERVE THE SRT FILE FORMAT !!!]]] FIX WRONG SPELLED WORDS / CONSISTENCY OF THE DIALOGUES OF THE FOLLOWING SRT FILE\n{srt_content}"
 
     
     srt_word_count = count_srt_words(srt_path)

@@ -86,7 +86,7 @@ def revising_subtitles(srt_path):
         model="claude-3-haiku-20240307",
         max_tokens=max_tokens_estimated,
         temperature=0.2,
-        system="Respect and preserve SRT file format",
+        system="Return SRT FILE FORMAT WITH FIXED / APPROPRIATE WORDS FOR THE CONTEXT. Preserve the dialect if there is any",
         messages=[
             {"role": "user", "content": prompt}
         ]
@@ -151,6 +151,6 @@ if __name__ == '__main__':
     audio_path = Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\KdYDAVL5tOg.wav")
     language = "en"  # Language sign
     #output_path = transcribe_file(audio_path, language)
-    cleaned = revising_subtitles(Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\KdYDAVL5tOg.srt"))
+    cleaned = revising_subtitles(Path(r"C:\Users\bilal\OneDrive\Desktop\AnaKolchi\downloads\zy8F_tGJYBM.srt"))
     #if output_path:
         #print(f"Transcription completed. Output file: {output_path}")
